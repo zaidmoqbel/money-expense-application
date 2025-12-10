@@ -1,0 +1,2 @@
+- [x] Update income button icon to Icons.call_received in lib/main.dart
+- [x] Update expense button icon to Icons.call_made in lib/main.dart
