@@ -184,68 +184,6 @@ class DatabaseHelper {
     }
   }
 
-  Future<void> _onOpen(Database db) async {
-    print('🔍 Checking database tables...');
-
-    // Check if categories table exists
-    final tables = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='categories'");
-    if (tables.isEmpty) {
-      print('⚠️  Categories table missing, creating it...');
-
-      // Create categories table
-      await db.execute('''\
-        CREATE TABLE categories (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          type TEXT NOT NULL,
-          isDefault INTEGER NOT NULL,
-          createdAt TEXT NOT NULL
-        )
-      ''');
-      print('✅ Categories table created');
-
-      // Insert default categories
-      final defaultExpenseCategories = [
-        'Food',
-        'Transport',
-        'Bills',
-        'Shopping',
-        'Entertainment',
-        'Healthcare',
-      ];
-
-      final defaultIncomeCategories = [
-        'Salary',
-        'Freelance',
-        'Investment',
-        'Gift',
-      ];
-
-      for (final category in defaultExpenseCategories) {
-        await db.insert('categories', {
-          'id': 'expense_${category.toLowerCase()}',
-          'name': category,
-          'type': 'expense',
-          'isDefault': 1,
-          'createdAt': DateTime.now().toIso8601String(),
-        });
-      }
-
-      for (final category in defaultIncomeCategories) {
-        await db.insert('categories', {
-          'id': 'income_${category.toLowerCase()}',
-          'name': category,
-          'type': 'income',
-          'isDefault': 1,
-          'createdAt': DateTime.now().toIso8601String(),
-        });
-      }
-      print('✅ Default categories inserted');
-    } else {
-      print('✅ Categories table exists');
-    }
-  }
-
   // ==================== TRANSACTION CRUD ====================
 
   Future<List<TransactionModel>> getAllTransactions() async {
