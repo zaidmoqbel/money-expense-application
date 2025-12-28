@@ -110,6 +110,7 @@ class SettingsScreen extends StatelessWidget {
       'gbp': '£ GBP',
       'jpy': '¥ JPY',
       'try': '₺ TRY',
+      'jod': 'د.أ JOD',
     };
 
     return ListTile(
@@ -129,16 +130,22 @@ class SettingsScreen extends StatelessWidget {
                   title: Text(entry.value),
                   value: entry.key,
                   groupValue: settings.currency,
-                  onChanged: (value) {
+                  onChanged: (value) async {
                     if (value != null) {
-                      provider.updateSettings(AppSettings(
-                        currency: value,
-                        darkMode: settings.darkMode,
-                        notifications: settings.notifications,
-                        reminderDays: settings.reminderDays,
-                        yearlyExpenseGoal: settings.yearlyExpenseGoal,
-                      ));
-                      Navigator.pop(context);
+                      try {
+                        // Convert all data to the new currency (this also updates settings)
+                        await provider.convertAllDataToNewCurrency(value);
+
+                        Navigator.pop(context);
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Currency changed successfully')),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error changing currency: $e')),
+                        );
+                      }
                     }
                   },
                 );

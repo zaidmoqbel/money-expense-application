@@ -321,8 +321,94 @@ class AppProvider with ChangeNotifier {
         return '¥';
       case 'try':
         return '₺';
+      case 'jod':
+        return 'د.أ';
       default:
         return '\$';
+    }
+  }
+
+  // Exchange rates relative to USD (approximate rates)
+  static const Map<String, double> _exchangeRates = {
+    'usd': 1.0,
+    'eur': 0.85,
+    'gbp': 0.73,
+    'jpy': 110.0,
+    'try': 42.0,
+    'jod': 0.71,
+  };
+
+  // Convert amount from one currency to another
+  double convertAmount(double amount, String fromCurrency, String toCurrency) {
+    if (fromCurrency == toCurrency) return amount;
+
+    // Convert to USD first, then to target currency
+    final usdAmount = amount / _exchangeRates[fromCurrency]!;
+    return usdAmount * _exchangeRates[toCurrency]!;
+  }
+
+  // Convert all data to new currency when currency setting changes
+  Future<void> convertAllDataToNewCurrency(String newCurrency) async {
+    final oldCurrency = _settings.currency;
+    if (oldCurrency == newCurrency) return;
+
+    try {
+      // Convert transactions
+      for (var transaction in _transactions) {
+        final convertedAmount = convertAmount(transaction.amount, oldCurrency, newCurrency);
+        final updatedTransaction = transaction.copyWith(amount: convertedAmount);
+        await updateTransaction(updatedTransaction);
+      }
+
+      // Convert savings goals
+      for (var goal in _savingsGoals) {
+        final convertedTarget = convertAmount(goal.target, oldCurrency, newCurrency);
+        final convertedSaved = convertAmount(goal.saved, oldCurrency, newCurrency);
+        final updatedGoal = SavingsGoal(
+          id: goal.id,
+          name: goal.name,
+          target: convertedTarget,
+          saved: convertedSaved,
+          color: goal.color,
+          icon: goal.icon,
+          createdAt: goal.createdAt,
+        );
+        await updateSavingsGoal(updatedGoal);
+      }
+
+      // Convert installments
+      for (var installment in _installments) {
+        final convertedTotal = convertAmount(installment.totalAmount, oldCurrency, newCurrency);
+        final convertedMonthly = convertAmount(installment.monthlyInstallment, oldCurrency, newCurrency);
+        final updatedInstallment = Installment(
+          id: installment.id,
+          bankName: installment.bankName,
+          totalAmount: convertedTotal,
+          monthlyInstallment: convertedMonthly,
+          paidInstallments: installment.paidInstallments,
+          totalInstallments: installment.totalInstallments,
+          dueDate: installment.dueDate,
+          status: installment.status,
+          color: installment.color,
+          logo: installment.logo,
+          createdAt: installment.createdAt,
+        );
+        await updateInstallment(updatedInstallment);
+      }
+
+      // Convert yearly expense goal
+      final convertedGoal = convertAmount(_settings.yearlyExpenseGoal, oldCurrency, newCurrency);
+      await updateSettings(AppSettings(
+        currency: newCurrency,
+        darkMode: _settings.darkMode,
+        notifications: _settings.notifications,
+        reminderDays: _settings.reminderDays,
+        yearlyExpenseGoal: convertedGoal,
+      ));
+
+    } catch (e) {
+      debugPrint('Error converting data to new currency: $e');
+      rethrow;
     }
   }
 
