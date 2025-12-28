@@ -1,7 +1,9 @@
 /// Transaction Model
-/// 
+///
 /// This class represents a financial transaction (income or expense).
 /// It includes methods to convert to/from database format.
+import 'dart:math';
+
 class TransactionModel {
   // Properties
   final String id;              // Unique identifier
@@ -60,11 +62,11 @@ class TransactionModel {
   }
 
   /// Generate unique ID for new transaction
-  /// 
-  /// Creates a unique ID using timestamp and random string.
-  /// Format: txn-1234567890
+  ///
+  /// Creates a unique ID using timestamp and random number.
+  /// Format: txn-1234567890-1234
   static String generateId() {
-    return 'txn-${DateTime.now().millisecondsSinceEpoch}';
+    return 'txn-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(10000)}';
   }
 
   /// Create a copy of this transaction with modified fields

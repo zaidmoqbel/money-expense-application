@@ -25,6 +25,13 @@ class _AccountTransactionsScreenState extends State<AccountTransactionsScreen> {
     _loadTransactions();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload transactions when dependencies change (e.g., after navigation)
+    _loadTransactions();
+  }
+
   void _loadTransactions() {
     final provider = Provider.of<AppProvider>(context, listen: false);
     _allTransactions = provider.transactions
@@ -32,6 +39,9 @@ class _AccountTransactionsScreenState extends State<AccountTransactionsScreen> {
         .toList()
       ..sort((a, b) => DateTime.parse(b.date).compareTo(DateTime.parse(a.date)));
 
+    // Reset pagination
+    _currentPage = 0;
+    _displayedTransactions.clear();
     _loadMoreTransactions();
   }
 

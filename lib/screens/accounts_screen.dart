@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../theme/app_colors.dart';
+import 'account_transactions_screen.dart';
 
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
@@ -34,27 +35,25 @@ class AccountsScreen extends StatelessWidget {
         builder: (context, provider, child) {
           final accountData = _calculateAccountData(provider.transactions);
 
-          if (accountData.isEmpty) {
-            return _buildEmptyState(context);
-          }
-
           return Column(
             children: [
               // Summary Card
-              _buildSummaryCard(context, accountData),
+              if (accountData.isNotEmpty) _buildSummaryCard(context, accountData),
               const SizedBox(height: 20),
 
               // Accounts List
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(20),
-                  itemCount: accountData.length,
-                  itemBuilder: (context, index) {
-                    final account = accountData.keys.elementAt(index);
-                    final data = accountData[account]!;
-                    return _buildAccountCard(context, account, data);
-                  },
-                ),
+                child: accountData.isEmpty
+                  ? _buildEmptyState(context)
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(20),
+                      itemCount: accountData.length,
+                      itemBuilder: (context, index) {
+                        final account = accountData.keys.elementAt(index);
+                        final data = accountData[account]!;
+                        return _buildAccountCard(context, account, data);
+                      },
+                    ),
               ),
             ],
           );
@@ -209,14 +208,16 @@ class AccountsScreen extends StatelessWidget {
     final currencyFormat = NumberFormat.currency(symbol: Provider.of<AppProvider>(context, listen: false).getCurrencySymbol(), decimalDigits: 0);
     final balance = data.income - data.expense;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: AppColors.cardShadow,
-      ),
+    return GestureDetector(
+      onTap: () => _showAccountOptionsDialog(context, accountType),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: AppColors.cardShadow,
+        ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -316,6 +317,52 @@ class AccountsScreen extends StatelessWidget {
           ),
         ],
       ),
+    ),
+    );
+  }
+
+  void _showAccountOptionsDialog(BuildContext context, String accountType) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text('$accountType Options'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.history),
+                title: const Text('Transaction History'),
+                onTap: () {
+                  Navigator.of(dialogContext).pop();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AccountTransactionsScreen(account: accountType),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.swap_horiz),
+                title: const Text('Transfer Money'),
+                onTap: () {
+                  Navigator.of(dialogContext).pop();
+                  final provider = Provider.of<AppProvider>(context, listen: false);
+                  final allAccounts = _calculateAccountData(provider.transactions).keys.toList();
+                  _showTransferDialog(context, provider, accountType, allAccounts);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -379,6 +426,130 @@ class AccountsScreen extends StatelessWidget {
     }
 
     return accountData;
+  }
+
+  void _showTransferDialog(BuildContext context, AppProvider provider, String fromAccount, List<String> allAccounts) {
+    // Include default account types plus existing accounts
+    final defaultAccounts = ['Cash', 'Credit Card', 'Debit Card', 'Bank Account', 'Wallet'];
+    final availableAccounts = {...defaultAccounts, ...allAccounts}.toList();
+    String? selectedToAccount = availableAccounts.isNotEmpty ? availableAccounts.first : null;
+    final TextEditingController amountController = TextEditingController();
+    final TextEditingController notesController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('Transfer from $fromAccount'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: selectedToAccount,
+                      decoration: const InputDecoration(
+                        labelText: 'To Account',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: availableAccounts.map((account) {
+                        return DropdownMenuItem(
+                          value: account,
+                          child: Text(account),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedToAccount = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: amountController,
+                      decoration: InputDecoration(
+                        labelText: 'Amount',
+                        border: const OutlineInputBorder(),
+                        prefixText: provider.getCurrencySymbol(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: notesController,
+                      decoration: const InputDecoration(
+                        labelText: 'Notes (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 2,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (selectedToAccount == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please select a destination account')),
+                      );
+                      return;
+                    }
+
+                    if (selectedToAccount == fromAccount) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Cannot transfer to the same account')),
+                      );
+                      return;
+                    }
+
+                    final amountText = amountController.text.trim();
+                    if (amountText.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter an amount')),
+                      );
+                      return;
+                    }
+
+                    final amount = double.tryParse(amountText);
+                    if (amount == null || amount <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter a valid positive amount')),
+                      );
+                      return;
+                    }
+
+                    try {
+                      await provider.transferBetweenAccounts(
+                        fromAccount,
+                        selectedToAccount!,
+                        amount,
+                        notesController.text.trim(),
+                      );
+
+                      Navigator.of(dialogContext).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Successfully transferred ${provider.getCurrencySymbol()}$amount from $fromAccount to $selectedToAccount')),
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Transfer failed: $e')),
+                      );
+                    }
+                  },
+                  child: const Text('Transfer'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 }
 

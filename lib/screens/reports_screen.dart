@@ -1060,14 +1060,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => AccountTransactionsScreen(account: accountType),
-                    ),
-                  );
-                },
+                onTap: () => _showAccountOptionsDialog(context, accountType),
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -1193,6 +1186,175 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
 
     return accountData;
+  }
+
+  void _showAccountOptionsDialog(BuildContext context, String accountType) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text('$accountType Options'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.history),
+                title: const Text('Transaction History'),
+                onTap: () {
+                  Navigator.of(dialogContext).pop();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AccountTransactionsScreen(account: accountType),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.swap_horiz),
+                title: const Text('Transfer Money'),
+                onTap: () {
+                  Navigator.of(dialogContext).pop();
+                  final provider = Provider.of<AppProvider>(context, listen: false);
+                  final allAccounts = _calculateAccountData(provider.transactions).keys.toList();
+                  _showTransferDialog(context, provider, accountType, allAccounts);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showTransferDialog(BuildContext context, AppProvider provider, String fromAccount, List<String> allAccounts) {
+    // Include default account types plus existing accounts
+    final defaultAccounts = ['Cash', 'Credit Card', 'Debit Card', 'Bank Account', 'Wallet'];
+    final availableAccounts = {...defaultAccounts, ...allAccounts}.toList();
+    String? selectedToAccount = availableAccounts.isNotEmpty ? availableAccounts.first : null;
+    final TextEditingController amountController = TextEditingController();
+    final TextEditingController notesController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('Transfer from $fromAccount'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: selectedToAccount,
+                      decoration: const InputDecoration(
+                        labelText: 'To Account',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: availableAccounts.map((account) {
+                        return DropdownMenuItem(
+                          value: account,
+                          child: Text(account),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedToAccount = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: amountController,
+                      decoration: InputDecoration(
+                        labelText: 'Amount',
+                        border: const OutlineInputBorder(),
+                        prefixText: provider.getCurrencySymbol(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: notesController,
+                      decoration: const InputDecoration(
+                        labelText: 'Notes (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 2,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (selectedToAccount == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please select a destination account')),
+                      );
+                      return;
+                    }
+
+                    if (selectedToAccount == fromAccount) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Cannot transfer to the same account')),
+                      );
+                      return;
+                    }
+
+                    final amountText = amountController.text.trim();
+                    if (amountText.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter an amount')),
+                      );
+                      return;
+                    }
+
+                    final amount = double.tryParse(amountText);
+                    if (amount == null || amount <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter a valid positive amount')),
+                      );
+                      return;
+                    }
+
+                    try {
+                      await provider.transferBetweenAccounts(
+                        fromAccount,
+                        selectedToAccount!,
+                        amount,
+                        notesController.text.trim(),
+                      );
+
+                      Navigator.of(dialogContext).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Successfully transferred ${provider.getCurrencySymbol()}$amount from $fromAccount to $selectedToAccount')),
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Transfer failed: $e')),
+                      );
+                    }
+                  },
+                  child: const Text('Transfer'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _exportToCSV(BuildContext context) async {

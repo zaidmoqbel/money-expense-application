@@ -89,6 +89,80 @@ class AppProvider with ChangeNotifier {
     }
   }
 
+  // Transfer money between accounts
+  Future<void> transferBetweenAccounts(
+    String fromAccount,
+    String toAccount,
+    double amount,
+    String notes,
+  ) async {
+    if (fromAccount == toAccount) {
+      throw Exception('Cannot transfer to the same account');
+    }
+
+    if (amount <= 0) {
+      throw Exception('Transfer amount must be positive');
+    }
+
+    // Calculate balance for fromAccount
+    double fromAccountBalance = 0.0;
+    for (var transaction in _transactions) {
+      if (transaction.account == fromAccount && transaction.category != 'Transfer') {
+        if (transaction.type == 'income') {
+          fromAccountBalance += transaction.amount;
+        } else {
+          fromAccountBalance -= transaction.amount;
+        }
+      }
+    }
+
+    if (fromAccountBalance < amount) {
+      throw Exception('Insufficient funds in $fromAccount account');
+    }
+
+    try {
+      // Create expense transaction from source account
+      final expenseTransaction = TransactionModel(
+        id: TransactionModel.generateId(),
+        type: 'expense',
+        amount: amount,
+        category: 'Transfer',
+        account: fromAccount,
+        date: DateTime.now().toIso8601String().split('T')[0],
+        notes: notes.isNotEmpty ? 'Transfer to $toAccount: $notes' : 'Transfer to $toAccount',
+        createdAt: DateTime.now().toIso8601String(),
+      );
+
+      // Create income transaction to destination account
+      final incomeTransaction = TransactionModel(
+        id: TransactionModel.generateId(),
+        type: 'income',
+        amount: amount,
+        category: 'Transfer',
+        account: toAccount,
+        date: DateTime.now().toIso8601String().split('T')[0],
+        notes: notes.isNotEmpty ? 'Transfer from $fromAccount: $notes' : 'Transfer from $fromAccount',
+        createdAt: DateTime.now().toIso8601String(),
+      );
+
+      // Use database transaction to ensure both transactions are added atomically
+      final db = await _dbHelper.database;
+      await db.transaction((txn) async {
+        await txn.insert('transactions', expenseTransaction.toMap());
+        await txn.insert('transactions', incomeTransaction.toMap());
+      });
+
+      // Add to local list and notify listeners
+      _transactions.insert(0, expenseTransaction);
+      _transactions.insert(0, incomeTransaction);
+      notifyListeners();
+
+    } catch (e) {
+      debugPrint('Error transferring between accounts: $e');
+      rethrow;
+    }
+  }
+
   // Get filtered transactions
   List<TransactionModel> getFilteredTransactions(String filter) {
     if (filter == 'all') {
@@ -103,6 +177,9 @@ class AppProvider with ChangeNotifier {
     double expense = 0;
 
     for (var transaction in _transactions) {
+      // Exclude transfers from balance calculation as they are internal movements
+      if (transaction.category == 'Transfer') continue;
+
       if (transaction.type == 'income') {
         income += transaction.amount;
       } else {
@@ -116,14 +193,14 @@ class AppProvider with ChangeNotifier {
   // Calculate total income
   double calculateTotalIncome() {
     return _transactions
-        .where((t) => t.type == 'income')
+        .where((t) => t.type == 'income' && t.category != 'Transfer')
         .fold(0, (sum, t) => sum + t.amount);
   }
 
   // Calculate total expense
   double calculateTotalExpense() {
     return _transactions
-        .where((t) => t.type == 'expense')
+        .where((t) => t.type == 'expense' && t.category != 'Transfer')
         .fold(0, (sum, t) => sum + t.amount);
   }
 
