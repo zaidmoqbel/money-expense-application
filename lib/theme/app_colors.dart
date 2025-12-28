@@ -58,12 +58,12 @@ class AppColors {
   // Neumorphic shadow colors
   static List<BoxShadow> neumorphicShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.05),
+      color: Colors.black.withValues(alpha: 0.05),
       blurRadius: 10,
       offset: const Offset(0, 4),
     ),
     BoxShadow(
-      color: Colors.white.withOpacity(0.8),
+      color: Colors.white.withValues(alpha: 0.8),
       blurRadius: 10,
       offset: const Offset(-4, -4),
     ),
@@ -72,7 +72,7 @@ class AppColors {
   // Card shadow
   static List<BoxShadow> cardShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.05),
+      color: Colors.black.withValues(alpha: 0.05),
       blurRadius: 10,
       offset: const Offset(0, 2),
     ),
@@ -93,6 +93,6 @@ class AppColors {
   
   // Convert Color to hex string
   static String toHex(Color color) {
-    return '#${color.value.toRadixString(16).substring(2)}';
+    return '#${color.toARGB32().toRadixString(16).substring(2)}';
   }
 }

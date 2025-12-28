@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'providers/app_provider.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/savings_goals_screen.dart';
 import 'screens/installments_screen.dart';
+
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/add_transaction_screen.dart';
@@ -27,7 +29,7 @@ class MyApp extends StatelessWidget {
         theme: ThemeData(
           primaryColor: AppColors.primary,
           scaffoldBackgroundColor: AppColors.background,
-          fontFamily: 'Roboto',
+          fontFamily: GoogleFonts.inter().fontFamily,
           colorScheme: const ColorScheme.light(
             primary: AppColors.primary,
             secondary: AppColors.success,

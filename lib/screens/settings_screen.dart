@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../models/app_settings.dart';
 import '../theme/app_colors.dart';
+import '../services/export_service.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -47,6 +48,14 @@ class SettingsScreen extends StatelessWidget {
                 _buildExportDataTile(context),
                 const Divider(height: 1),
                 _buildClearDataTile(context, provider),
+              ]),
+              const SizedBox(height: 24),
+
+              // Category Management Section
+              _buildSectionHeader('Category Management'),
+              const SizedBox(height: 12),
+              _buildSettingsCard([
+                _buildManageCategoriesTile(context, provider),
               ]),
               const SizedBox(height: 24),
 
@@ -233,16 +242,33 @@ class SettingsScreen extends StatelessWidget {
             final controller = TextEditingController(
               text: settings.yearlyExpenseGoal.toStringAsFixed(0),
             );
-            
+
             return AlertDialog(
-              title: const Text('Yearly Expense Goal'),
-              content: TextField(
-                controller: controller,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Target amount',
-                  prefixText: Provider.of<AppProvider>(context, listen: false).getCurrencySymbol(),
-                ),
+              title: const Text('Set Your Yearly Expense Goal'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'How much do you think you will spend this year?',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Enter amount',
+                      prefixText: Provider.of<AppProvider>(context, listen: false).getCurrencySymbol(),
+                      border: const OutlineInputBorder(),
+                    ),
+                    autofocus: true,
+                  ),
+                ],
               ),
               actions: [
                 TextButton(
@@ -265,7 +291,7 @@ class SettingsScreen extends StatelessWidget {
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                   ),
-                  child: const Text('Save'),
+                  child: const Text('Save Goal'),
                 ),
               ],
             );
@@ -281,13 +307,32 @@ class SettingsScreen extends StatelessWidget {
       title: const Text('Export Data'),
       subtitle: const Text('Export transactions as CSV'),
       trailing: const Icon(Icons.chevron_right),
-      onTap: () {
-        // TODO: Implement export functionality
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Export feature coming soon!')),
-        );
-      },
+      onTap: () => _exportData(context),
     );
+  }
+
+  Future<void> _exportData(BuildContext context) async {
+    try {
+      final provider = Provider.of<AppProvider>(context, listen: false);
+      final transactions = provider.transactions;
+
+      if (transactions.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No transactions to export')),
+        );
+        return;
+      }
+
+      final filePath = await ExportService.exportTransactionsToCSV(transactions);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Transactions exported to $filePath')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to export: $e')),
+      );
+    }
   }
 
   Widget _buildClearDataTile(BuildContext context, AppProvider provider) {
@@ -333,6 +378,21 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildManageCategoriesTile(BuildContext context, AppProvider provider) {
+    return ListTile(
+      leading: const Icon(Icons.category_outlined, color: AppColors.primary),
+      title: const Text('Manage Categories'),
+      subtitle: const Text('Add or remove transaction categories'),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (context) => _CategoryManagementDialog(provider: provider),
+        );
+      },
+    );
+  }
+
   Widget _buildAboutTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.info_outline, color: AppColors.primary),
@@ -357,5 +417,199 @@ class SettingsScreen extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _CategoryManagementDialog extends StatefulWidget {
+  final AppProvider provider;
+
+  const _CategoryManagementDialog({required this.provider});
+
+  @override
+  State<_CategoryManagementDialog> createState() => _CategoryManagementDialogState();
+}
+
+class _CategoryManagementDialogState extends State<_CategoryManagementDialog> {
+  final TextEditingController _newCategoryController = TextEditingController();
+  String _selectedType = 'expense';
+  List<String> _currentCategories = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    setState(() => _isLoading = true);
+    try {
+      final categories = await widget.provider.getCategoriesByType(_selectedType);
+      setState(() {
+        _currentCategories = categories;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading categories: $e')),
+      );
+    }
+  }
+
+  void _changeType(String type) {
+    setState(() => _selectedType = type);
+    _loadCategories();
+  }
+
+  Future<void> _addCategory() async {
+    final categoryName = _newCategoryController.text.trim();
+    if (categoryName.isNotEmpty && !_currentCategories.contains(categoryName)) {
+      try {
+        await widget.provider.addCategory(categoryName, _selectedType);
+        _newCategoryController.clear();
+        await _loadCategories();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Category "$categoryName" added successfully!')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error adding category: $e')),
+        );
+      }
+    } else if (categoryName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a category name')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Category already exists')),
+      );
+    }
+  }
+
+  Future<void> _removeCategory(String category) async {
+    // Check if it's a default category
+    final defaultCategories = _selectedType == 'expense'
+        ? ['Food', 'Transport', 'Bills', 'Shopping', 'Entertainment', 'Healthcare']
+        : ['Salary', 'Freelance', 'Investment', 'Gift'];
+
+    if (defaultCategories.contains(category)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot remove default categories')),
+      );
+      return;
+    }
+
+    try {
+      await widget.provider.removeCategory(category, _selectedType);
+      await _loadCategories();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Category "$category" removed successfully!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error removing category: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Manage Categories'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Type Toggle
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _changeType('expense'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _selectedType == 'expense' ? Colors.orange : Colors.grey[200],
+                      foregroundColor: _selectedType == 'expense' ? Colors.white : Colors.grey[700],
+                    ),
+                    child: const Text('Expenses'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _changeType('income'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _selectedType == 'income' ? Colors.green : Colors.grey[200],
+                      foregroundColor: _selectedType == 'income' ? Colors.white : Colors.grey[700],
+                    ),
+                    child: const Text('Income'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Add New Category
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _newCategoryController,
+                    decoration: const InputDecoration(
+                      labelText: 'New Category Name',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _addCategory,
+                  child: const Text('Add'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Current Categories
+            const Text(
+              'Current Categories:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              constraints: BoxConstraints(maxHeight: 200),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _currentCategories.length,
+                itemBuilder: (context, index) {
+                  final category = _currentCategories[index];
+                  return ListTile(
+                    title: Text(category),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () => _removeCategory(category),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _newCategoryController.dispose();
+    super.dispose();
   }
 }

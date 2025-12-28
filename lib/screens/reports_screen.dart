@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../providers/app_provider.dart';
+import '../services/export_service.dart';
 import '../theme/app_colors.dart';
+import 'account_transactions_screen.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -20,6 +22,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   int _selectedYear = 0; // 0 means all years
   final List<String> _selectedCategories = [];
   bool _showFilters = false;
+  bool _showPieExpenses = true;
+  bool _showExpenseChart = true; // true for expense, false for income
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +43,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.download),
+            onPressed: () => _exportToCSV(context),
+            tooltip: 'Export to CSV',
+          ),
           IconButton(
             icon: const Icon(Icons.filter_list),
             onPressed: () {
@@ -83,6 +92,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
                 // Summary Stats
                 _buildSummaryStats(monthlyData),
+                const SizedBox(height: 24),
+
+                // Accounts Overview
+                _buildAccountsOverview(provider),
               ],
             ),
           );
@@ -241,8 +254,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
     // Calculate trend indicators
     final trendIndicators = _calculateTrendIndicators(monthlyData);
 
-    final maxHeight = _getMaxValue(monthlyData) * 1.4;
+    final maxHeight = _getMaxValue(monthlyData) * 1.2;
     final scaleFactor = chartHeight / maxHeight;
+    final currencyFormat = NumberFormat.currency(symbol: Provider.of<AppProvider>(context, listen: false).getCurrencySymbol(), decimalDigits: 0);
 
     return Stack(
       children: [
@@ -305,7 +319,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
             barGroups: entries.asMap().entries.map((entry) {
               final index = entry.key;
               final data = entry.value.value;
-              final currencyFormat = NumberFormat.currency(symbol: Provider.of<AppProvider>(context, listen: false).getCurrencySymbol(), decimalDigits: 0);
 
               return BarChartGroupData(
                 x: index,
@@ -313,28 +326,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   BarChartRodData(
                     toY: data['income'] ?? 0,
                     color: AppColors.success,
-                    width: 12,
+                    width: 8,
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                    rodStackItems: [
-                      BarChartRodStackItem(
-                        0,
-                        data['income'] ?? 0,
-                        AppColors.success,
-                      ),
-                    ],
                   ),
                   BarChartRodData(
                     toY: data['expense'] ?? 0,
                     color: AppColors.warning,
-                    width: 12,
+                    width: 8,
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                    rodStackItems: [
-                      BarChartRodStackItem(
-                        0,
-                        data['expense'] ?? 0,
-                        AppColors.warning,
-                      ),
-                    ],
                   ),
                 ],
               );
@@ -347,51 +346,60 @@ class _ReportsScreenState extends State<ReportsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: entries.asMap().entries.map((entry) {
               final data = entry.value.value;
-              final currencyFormat = NumberFormat.currency(symbol: Provider.of<AppProvider>(context, listen: false).getCurrencySymbol(), decimalDigits: 0);
-              final incomeHeight = (data['income'] ?? 0) * scaleFactor;
-              final expenseHeight = (data['expense'] ?? 0) * scaleFactor;
+              final incomeValue = data['income'] ?? 0;
+              final expenseValue = data['expense'] ?? 0;
+              final incomeHeight = incomeValue * scaleFactor;
+              final expenseHeight = expenseValue * scaleFactor;
 
               return SizedBox(
                 width: 24, // Match bar width + some padding
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                height: chartHeight,
+                child: Stack(
                   children: [
-                    // Income label
-                    if (data['income'] != null && data['income']! > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          currencyFormat.format(data['income']),
-                          style: const TextStyle(
-                            fontSize: 8,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
+                    if (incomeValue > 0)
+                      Positioned(
+                        top: chartHeight - incomeHeight - 20,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            currencyFormat.format(incomeValue),
+                            style: const TextStyle(
+                              fontSize: 8,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
                         ),
                       ),
-                    SizedBox(height: expenseHeight > 0 ? 2 : 0),
-                    // Expense label
-                    if (data['expense'] != null && data['expense']! > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.warning.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          currencyFormat.format(data['expense']),
-                          style: const TextStyle(
-                            fontSize: 8,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
+                    if (expenseValue > 0)
+                      Positioned(
+                        top: chartHeight - expenseHeight - 20,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            currencyFormat.format(expenseValue),
+                            style: const TextStyle(
+                              fontSize: 8,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
                         ),
                       ),
-                    SizedBox(height: max(0, chartHeight - incomeHeight - expenseHeight - (incomeHeight > 0 ? 20 : 0) - (expenseHeight > 0 ? 20 : 0))),
                   ],
                 ),
               );
@@ -488,16 +496,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Widget _buildCategoryBreakdown(AppProvider provider, List filteredTransactions) {
-    final categoryExpenses = _calculateCategoryExpenses(filteredTransactions);
-    final total = categoryExpenses.values.fold(0.0, (sum, amount) => sum + amount);
+    final categoryData = _showExpenseChart ? _calculateCategoryExpenses(filteredTransactions) : _calculateCategoryIncome(filteredTransactions);
 
-    if (categoryExpenses.isEmpty) {
+    final total = categoryData.values.fold(0.0, (sum, amount) => sum + amount);
+
+    if (categoryData.isEmpty) {
       return const SizedBox.shrink();
     }
 
     final currencyFormat = NumberFormat.currency(symbol: Provider.of<AppProvider>(context, listen: false).getCurrencySymbol(), decimalDigits: 0);
 
-    final pieSections = categoryExpenses.entries.map((entry) {
+    final pieSections = categoryData.entries.map((entry) {
       final percentage = entry.value / total;
       final color = AppColors.getCategoryColor(entry.key);
       return PieChartSectionData(
@@ -518,108 +527,178 @@ class _ReportsScreenState extends State<ReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Expense Summary',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 20),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              SizedBox(
-                height: 150,
-                width: 150,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    PieChart(
-                      PieChartData(
-                        sections: pieSections,
-                        centerSpaceRadius: 25,
-                        sectionsSpace: 2,
-                        pieTouchData: PieTouchData(
-                          touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                            setState(() {
-                              if (!event.isInterestedForInteractions ||
-                                  pieTouchResponse == null ||
-                                  pieTouchResponse.touchedSection == null) {
-                                _touchedIndex = -1;
-                                return;
-                              }
-                              _touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                    if (_touchedIndex != null && _touchedIndex! >= 0 && _touchedIndex! < categoryExpenses.length)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${(categoryExpenses.entries.elementAt(_touchedIndex!).value / total * 100).toInt()}%',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                  ],
+              Text(
+                '${_showExpenseChart ? 'Expense' : 'Income'} Categories',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: categoryExpenses.entries.map((entry) {
-                    final color = AppColors.getCategoryColor(entry.key);
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              entry.key,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textPrimary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Text(
-                            currencyFormat.format(entry.value),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: Icon(_showExpenseChart ? Icons.money_off : Icons.attach_money),
+                    onPressed: () {
+                      setState(() {
+                        _showExpenseChart = !_showExpenseChart;
+                      });
+                    },
+                    tooltip: _showExpenseChart ? 'Show Income' : 'Show Expenses',
+                  ),
+                  IconButton(
+                    icon: Icon(_showPieExpenses ? Icons.pie_chart : Icons.list),
+                    onPressed: () {
+                      setState(() {
+                        _showPieExpenses = !_showPieExpenses;
+                      });
+                    },
+                    tooltip: _showPieExpenses ? 'Show List' : 'Show Pie Chart',
+                  ),
+                ],
               ),
             ],
           ),
+          const SizedBox(height: 20),
+          if (_showPieExpenses)
+            Row(
+              children: [
+                SizedBox(
+                  height: 150,
+                  width: 150,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PieChart(
+                        PieChartData(
+                          sections: pieSections,
+                          centerSpaceRadius: 25,
+                          sectionsSpace: 2,
+                          pieTouchData: PieTouchData(
+                            touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                              setState(() {
+                                if (!event.isInterestedForInteractions ||
+                                    pieTouchResponse == null ||
+                                    pieTouchResponse.touchedSection == null) {
+                                  _touchedIndex = -1;
+                                  return;
+                                }
+                                _touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      if (_touchedIndex != null && _touchedIndex! >= 0 && _touchedIndex! < categoryData.length)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${(categoryData.entries.elementAt(_touchedIndex!).value / total * 100).toInt()}%',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: categoryData.entries.map((entry) {
+                      final color = AppColors.getCategoryColor(entry.key);
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                entry.key,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Text(
+                              currencyFormat.format(entry.value),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: categoryData.entries.map((entry) {
+                final color = AppColors.getCategoryColor(entry.key);
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          entry.key,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        currencyFormat.format(entry.value),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
         ],
       ),
     );
@@ -905,6 +984,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return categoryExpenses;
   }
 
+  Map<String, double> _calculateCategoryIncome(List transactions) {
+    final Map<String, double> categoryIncome = {};
+
+    for (var transaction in transactions) {
+      if (transaction.type == 'income') {
+        categoryIncome[transaction.category] =
+            (categoryIncome[transaction.category] ?? 0) + transaction.amount;
+      }
+    }
+
+    return categoryIncome;
+  }
+
   Map<String, String> _calculateTrendIndicators(Map<String, Map<String, double>> monthlyData) {
     final Map<String, String> trends = {};
     final entries = monthlyData.entries.toList();
@@ -931,4 +1023,211 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     return trends;
   }
+
+  Widget _buildAccountsOverview(AppProvider provider) {
+    final accountData = _calculateAccountData(provider.transactions);
+
+    if (accountData.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final currencyFormat = NumberFormat.currency(symbol: Provider.of<AppProvider>(context, listen: false).getCurrencySymbol(), decimalDigits: 0);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Accounts Overview',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...accountData.entries.map((entry) {
+            final accountType = entry.key;
+            final data = entry.value;
+            final balance = data.income - data.expense;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AccountTransactionsScreen(account: accountType),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                          child: Icon(
+                            _getAccountIcon(accountType),
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              accountType,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              '${data.transactionCount} transactions',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Balance',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          Text(
+                            currencyFormat.format(balance),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: balance >= 0 ? AppColors.success : AppColors.warning,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  IconData _getAccountIcon(String accountType) {
+    final type = accountType.toLowerCase();
+    if (type.contains('cash')) {
+      return Icons.money;
+    } else if (type.contains('credit') || type.contains('card')) {
+      return Icons.credit_card;
+    } else if (type.contains('debit')) {
+      return Icons.account_balance_wallet;
+    } else if (type.contains('bank') || type.contains('transfer')) {
+      return Icons.account_balance;
+    } else if (type.contains('wallet')) {
+      return Icons.account_balance_wallet;
+    } else {
+      return Icons.account_balance_wallet;
+    }
+  }
+
+  Map<String, AccountData> _calculateAccountData(List transactions) {
+    final Map<String, AccountData> accountData = {};
+
+    for (var transaction in transactions) {
+      final account = transaction.account;
+      if (!accountData.containsKey(account)) {
+        accountData[account] = AccountData(
+          income: 0.0,
+          expense: 0.0,
+          transactionCount: 0,
+        );
+      }
+
+      final data = accountData[account]!;
+      if (transaction.type == 'income') {
+        accountData[account] = AccountData(
+          income: data.income + transaction.amount,
+          expense: data.expense,
+          transactionCount: data.transactionCount + 1,
+        );
+      } else {
+        accountData[account] = AccountData(
+          income: data.income,
+          expense: data.expense + transaction.amount,
+          transactionCount: data.transactionCount + 1,
+        );
+      }
+    }
+
+    return accountData;
+  }
+
+  Future<void> _exportToCSV(BuildContext context) async {
+    try {
+      final provider = Provider.of<AppProvider>(context, listen: false);
+      final transactions = provider.transactions;
+
+      if (transactions.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No transactions to export')),
+        );
+        return;
+      }
+
+      final filePath = await ExportService.exportTransactionsToCSV(transactions);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Transactions exported to $filePath')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to export: $e')),
+      );
+    }
+  }
+}
+
+class AccountData {
+  final double income;
+  final double expense;
+  final int transactionCount;
+
+  AccountData({
+    required this.income,
+    required this.expense,
+    required this.transactionCount,
+  });
 }

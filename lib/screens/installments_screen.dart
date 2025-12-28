@@ -430,7 +430,6 @@ class InstallmentsScreen extends StatelessWidget {
   void _showAddInstallmentDialog(BuildContext context) {
     final nameController = TextEditingController();
     final totalAmountController = TextEditingController();
-    final monthlyController = TextEditingController();
     final installmentsController = TextEditingController();
     String selectedLogo = '🏦';
     String selectedColor = AppColors.toHex(AppColors.warning);
@@ -446,8 +445,8 @@ class InstallmentsScreen extends StatelessWidget {
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(
-                  labelText: 'Bank/Store Name',
-                  hintText: 'e.g., HSBC Credit Card',
+                  labelText: 'Installment Name',
+                  hintText: 'e.g., iPhone 15, Car Loan',
                 ),
               ),
               const SizedBox(height: 12),
@@ -461,19 +460,11 @@ class InstallmentsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: monthlyController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Monthly Payment',
-                  prefixText: Provider.of<AppProvider>(context, listen: false).getCurrencySymbol(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
                 controller: installmentsController,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Total Installments',
+                  labelText: 'Number of Months',
+                  hintText: 'e.g., 12, 24, 36',
                 ),
               ),
             ],
@@ -488,15 +479,18 @@ class InstallmentsScreen extends StatelessWidget {
             onPressed: () {
               if (nameController.text.isNotEmpty &&
                   totalAmountController.text.isNotEmpty &&
-                  monthlyController.text.isNotEmpty &&
                   installmentsController.text.isNotEmpty) {
+                final totalAmount = double.parse(totalAmountController.text);
+                final totalInstallments = int.parse(installmentsController.text);
+                final monthlyInstallment = totalAmount / totalInstallments;
+
                 final installment = Installment(
                   id: 'inst-${DateTime.now().millisecondsSinceEpoch}',
                   bankName: nameController.text,
-                  totalAmount: double.parse(totalAmountController.text),
-                  monthlyInstallment: double.parse(monthlyController.text),
+                  totalAmount: totalAmount,
+                  monthlyInstallment: monthlyInstallment,
                   paidInstallments: 0,
-                  totalInstallments: int.parse(installmentsController.text),
+                  totalInstallments: totalInstallments,
                   dueDate: DateTime.now().add(const Duration(days: 30)).toIso8601String(),
                   status: 'upcoming',
                   color: selectedColor,

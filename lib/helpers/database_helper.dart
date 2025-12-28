@@ -21,12 +21,21 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(
+    // Database will persist between app runs
+    // Uncomment below for development if you need to reset database:
+    // if (await databaseExists(path)) {
+    //   print('🗑️  Deleting existing database for clean development state...');
+    //   await deleteDatabase(path);
+    // }
+
+    final db = await openDatabase(
       path,
-      version: 2, // CHANGED FROM 1 TO 2 - This will trigger database upgrade
+      version: 5, // Bumped version to force fresh database creation
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
+
+    return db;
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -79,6 +88,56 @@ class DatabaseHelper {
     ''');
     print('✅ Installments table created');
 
+    // Categories table
+    await db.execute('''\
+      CREATE TABLE categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        isDefault INTEGER NOT NULL,
+        createdAt TEXT NOT NULL
+      )
+    ''');
+    print('✅ Categories table created');
+
+    // Insert default categories
+    final defaultExpenseCategories = [
+      'Food',
+      'Transport',
+      'Bills',
+      'Shopping',
+      'Entertainment',
+      'Healthcare',
+    ];
+
+    final defaultIncomeCategories = [
+      'Salary',
+      'Freelance',
+      'Investment',
+      'Gift',
+    ];
+
+    for (final category in defaultExpenseCategories) {
+      await db.insert('categories', {
+        'id': 'expense_${category.toLowerCase()}',
+        'name': category,
+        'type': 'expense',
+        'isDefault': 1,
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+    }
+
+    for (final category in defaultIncomeCategories) {
+      await db.insert('categories', {
+        'id': 'income_${category.toLowerCase()}',
+        'name': category,
+        'type': 'income',
+        'isDefault': 1,
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+    }
+    print('✅ Default categories inserted');
+
     // Settings table
     await db.execute('''\
       CREATE TABLE settings (
@@ -107,20 +166,83 @@ class DatabaseHelper {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     print('⚡ Upgrading database from version $oldVersion to $newVersion');
-    
-    if (oldVersion < 2) {
-      print('🗑️  Dropping old tables...');
-      
+
+    if (oldVersion < 4) {
+      print('🗑️  Recreating database with proper schema...');
+
       // Drop all old tables
       await db.execute('DROP TABLE IF EXISTS transactions');
       await db.execute('DROP TABLE IF EXISTS savings_goals');
       await db.execute('DROP TABLE IF EXISTS installments');
       await db.execute('DROP TABLE IF EXISTS settings');
-      
+      await db.execute('DROP TABLE IF EXISTS categories');
+
       print('✅ Old tables dropped');
-      
+
       // Recreate with correct schema
       await _createDB(db, newVersion);
+    }
+  }
+
+  Future<void> _onOpen(Database db) async {
+    print('🔍 Checking database tables...');
+
+    // Check if categories table exists
+    final tables = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='categories'");
+    if (tables.isEmpty) {
+      print('⚠️  Categories table missing, creating it...');
+
+      // Create categories table
+      await db.execute('''\
+        CREATE TABLE categories (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          isDefault INTEGER NOT NULL,
+          createdAt TEXT NOT NULL
+        )
+      ''');
+      print('✅ Categories table created');
+
+      // Insert default categories
+      final defaultExpenseCategories = [
+        'Food',
+        'Transport',
+        'Bills',
+        'Shopping',
+        'Entertainment',
+        'Healthcare',
+      ];
+
+      final defaultIncomeCategories = [
+        'Salary',
+        'Freelance',
+        'Investment',
+        'Gift',
+      ];
+
+      for (final category in defaultExpenseCategories) {
+        await db.insert('categories', {
+          'id': 'expense_${category.toLowerCase()}',
+          'name': category,
+          'type': 'expense',
+          'isDefault': 1,
+          'createdAt': DateTime.now().toIso8601String(),
+        });
+      }
+
+      for (final category in defaultIncomeCategories) {
+        await db.insert('categories', {
+          'id': 'income_${category.toLowerCase()}',
+          'name': category,
+          'type': 'income',
+          'isDefault': 1,
+          'createdAt': DateTime.now().toIso8601String(),
+        });
+      }
+      print('✅ Default categories inserted');
+    } else {
+      print('✅ Categories table exists');
     }
   }
 
@@ -296,6 +418,59 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [1],
     );
+  }
+
+  // ==================== CATEGORY CRUD ====================
+
+  Future<List<Map<String, dynamic>>> getAllCategories() async {
+    final db = await database;
+    final result = await db.query(
+      'categories',
+      orderBy: 'createdAt ASC',
+    );
+    return result;
+  }
+
+  Future<List<String>> getCategoriesByType(String type) async {
+    final db = await database;
+    final result = await db.query(
+      'categories',
+      where: 'type = ?',
+      whereArgs: [type],
+      orderBy: 'createdAt ASC',
+    );
+    return result.map((row) => row['name'] as String).toList();
+  }
+
+  Future<int> insertCategory(String name, String type) async {
+    final db = await database;
+    return await db.insert('categories', {
+      'id': '${type}_${name.toLowerCase().replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}',
+      'name': name,
+      'type': type,
+      'isDefault': 0,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<int> deleteCategory(String name, String type) async {
+    final db = await database;
+    return await db.delete(
+      'categories',
+      where: 'name = ? AND type = ? AND isDefault = ?',
+      whereArgs: [name, type, 0],
+    );
+  }
+
+  Future<bool> isCategoryInUse(String categoryName, String type) async {
+    final db = await database;
+    final result = await db.query(
+      'transactions',
+      where: 'category = ? AND type = ?',
+      whereArgs: [categoryName, type],
+      limit: 1,
+    );
+    return result.isNotEmpty;
   }
 
   // ==================== UTILITY METHODS ====================

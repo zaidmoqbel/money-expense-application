@@ -6,12 +6,14 @@ import '../providers/app_provider.dart';
 class TransactionCard extends StatelessWidget {
   final TransactionModel transaction;
   final VoidCallback? onDelete;
+  final VoidCallback? onEdit;
   final VoidCallback? onTap;
 
   const TransactionCard({
     super.key,
     required this.transaction,
     this.onDelete,
+    this.onEdit,
     this.onTap,
   });
 
@@ -87,7 +89,7 @@ class TransactionCard extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: categoryColor.withOpacity(0.1),
+                color: categoryColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
@@ -103,6 +105,7 @@ class TransactionCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Category name (first line)
                   Text(
                     transaction.category,
                     style: const TextStyle(
@@ -111,45 +114,57 @@ class TransactionCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        transaction.date,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      if (transaction.notes != null &&
-                          transaction.notes!.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '• ${transaction.notes}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
+                  // Amount (second line)
+                  Text(
+                    '${isIncome ? "+" : "-"}${Provider.of<AppProvider>(context, listen: false).getCurrencySymbol()}${transaction.amount.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isIncome ? Colors.green[600] : Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // Date (third line)
+                  Text(
+                    transaction.date,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
                   ),
                 ],
               ),
             ),
 
-            // Amount
+            // Action buttons and payment method
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  '${isIncome ? "+" : "-"}${Provider.of<AppProvider>(context, listen: false).getCurrencySymbol()}${transaction.amount.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isIncome ? Colors.green[600] : Colors.grey[800],
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Action buttons (compact)
+                    if (onEdit != null) ...[
+                      IconButton(
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_outlined),
+                        color: Colors.blue[400],
+                        iconSize: 16,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                    if (onDelete != null) ...[
+                      IconButton(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_outline),
+                        color: Colors.red[400],
+                        iconSize: 16,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -161,17 +176,6 @@ class TransactionCard extends StatelessWidget {
                 ),
               ],
             ),
-
-            // Delete button (optional)
-            if (onDelete != null) ...[
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline),
-                color: Colors.red[400],
-                iconSize: 20,
-              ),
-            ],
           ],
         ),
       ),

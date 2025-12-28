@@ -338,4 +338,46 @@ class AppProvider with ChangeNotifier {
       rethrow;
     }
   }
+
+  // ==================== CATEGORY METHODS ====================
+
+  Future<List<String>> getCategoriesByType(String type) async {
+    try {
+      return await _dbHelper.getCategoriesByType(type);
+    } catch (e) {
+      debugPrint('Error getting categories: $e');
+      // Return default categories if database fails
+      if (type == 'expense') {
+        return ['Food', 'Transport', 'Bills', 'Shopping', 'Entertainment', 'Healthcare'];
+      } else {
+        return ['Salary', 'Freelance', 'Investment', 'Gift'];
+      }
+    }
+  }
+
+  Future<void> addCategory(String name, String type) async {
+    try {
+      await _dbHelper.insertCategory(name, type);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error adding category: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> removeCategory(String name, String type) async {
+    try {
+      // Check if category is in use
+      final isInUse = await _dbHelper.isCategoryInUse(name, type);
+      if (isInUse) {
+        throw Exception('Cannot delete category that is currently in use');
+      }
+
+      await _dbHelper.deleteCategory(name, type);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error removing category: $e');
+      rethrow;
+    }
+  }
 }

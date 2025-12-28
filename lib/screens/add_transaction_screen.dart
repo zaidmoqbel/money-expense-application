@@ -5,7 +5,8 @@ import '../models/transaction.dart';
 
 class AddTransactionScreen extends StatefulWidget {
   final String? initialType;
-  const AddTransactionScreen({super.key, this.initialType});
+  final TransactionModel? transactionToEdit;
+  const AddTransactionScreen({super.key, this.initialType, this.transactionToEdit});
 
   @override
   State<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -13,7 +14,7 @@ class AddTransactionScreen extends StatefulWidget {
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final _formKey = GlobalKey<FormState>();
-  
+
   String _transactionType = 'expense';
   final _amountController = TextEditingController();
   String? _selectedCategory;
@@ -22,23 +23,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   DateTime _selectedDate = DateTime.now();
   final _notesController = TextEditingController();
 
-  final List<String> _expenseCategories = [
-    'Food',
-    'Transport',
-    'Bills',
-    'Shopping',
-    'Entertainment',
-    'Healthcare',
-    'Others',
-  ];
-
-  final List<String> _incomeCategories = [
-    'Salary',
-    'Freelance',
-    'Investment',
-    'Gift',
-    'Others',
-  ];
+  List<String> _categories = [];
+  bool _isLoadingCategories = true;
 
   final List<String> _accounts = [
     'Cash',
@@ -51,9 +37,19 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialType != null) {
+    if (widget.transactionToEdit != null) {
+      // Editing existing transaction
+      final transaction = widget.transactionToEdit!;
+      _transactionType = transaction.type;
+      _amountController.text = transaction.amount.toString();
+      _selectedCategory = transaction.category;
+      _selectedAccount = transaction.account;
+      _selectedDate = DateTime.parse(transaction.date);
+      _notesController.text = transaction.notes ?? '';
+    } else if (widget.initialType != null) {
       _transactionType = widget.initialType!;
     }
+    _loadCategories();
   }
 
   @override
@@ -64,10 +60,31 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     super.dispose();
   }
 
-  List<String> get _categories {
-    return _transactionType == 'expense' 
-        ? _expenseCategories 
-        : _incomeCategories;
+  Future<void> _loadCategories() async {
+    setState(() {
+      _isLoadingCategories = true;
+    });
+
+    try {
+      final provider = Provider.of<AppProvider>(context, listen: false);
+      final categories = await provider.getCategoriesByType(_transactionType);
+      // Ensure "Others" is always available
+      if (!categories.contains('Others')) {
+        categories.add('Others');
+      }
+      setState(() {
+        _categories = categories;
+        _isLoadingCategories = false;
+      });
+    } catch (e) {
+      // Fallback to default categories if database fails
+      setState(() {
+        _categories = _transactionType == 'expense'
+            ? ['Food', 'Transport', 'Bills', 'Shopping', 'Entertainment', 'Healthcare', 'Others']
+            : ['Salary', 'Freelance', 'Investment', 'Gift', 'Others'];
+        _isLoadingCategories = false;
+      });
+    }
   }
 
   void _saveTransaction() {
@@ -84,7 +101,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
 
     // Validate custom category
-    if (_selectedCategory == 'Others' && 
+    if (_selectedCategory == 'Others' &&
         _customCategoryController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a custom category name')),
@@ -100,32 +117,61 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       return;
     }
 
-    final transaction = TransactionModel(
-      id: TransactionModel.generateId(),
-      type: _transactionType,
-      amount: double.parse(_amountController.text),
-      category: _selectedCategory == 'Others' 
-          ? _customCategoryController.text 
-          : _selectedCategory!,
-      account: _selectedAccount!,
-      date: _selectedDate.toString().split(' ')[0],
-      notes: _notesController.text.trim().isNotEmpty 
-          ? _notesController.text.trim() 
-          : null,
-      createdAt: DateTime.now().toIso8601String(),
-    );
+    final provider = Provider.of<AppProvider>(context, listen: false);
 
-    Provider.of<AppProvider>(context, listen: false)
-        .addTransaction(transaction);
+    if (widget.transactionToEdit != null) {
+      // Editing existing transaction
+      final updatedTransaction = TransactionModel(
+        id: widget.transactionToEdit!.id,
+        type: _transactionType,
+        amount: double.parse(_amountController.text),
+        category: _selectedCategory == 'Others'
+            ? _customCategoryController.text
+            : _selectedCategory!,
+        account: _selectedAccount!,
+        date: _selectedDate.toString().split(' ')[0],
+        notes: _notesController.text.trim().isNotEmpty
+            ? _notesController.text.trim()
+            : null,
+        createdAt: widget.transactionToEdit!.createdAt,
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${_transactionType == "income" ? "Income" : "Expense"} added successfully!',
+      provider.updateTransaction(updatedTransaction);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Transaction updated successfully!'),
+          backgroundColor: Colors.green,
         ),
-        backgroundColor: Colors.green,
-      ),
-    );
+      );
+    } else {
+      // Adding new transaction
+      final transaction = TransactionModel(
+        id: TransactionModel.generateId(),
+        type: _transactionType,
+        amount: double.parse(_amountController.text),
+        category: _selectedCategory == 'Others'
+            ? _customCategoryController.text
+            : _selectedCategory!,
+        account: _selectedAccount!,
+        date: _selectedDate.toString().split(' ')[0],
+        notes: _notesController.text.trim().isNotEmpty
+            ? _notesController.text.trim()
+            : null,
+        createdAt: DateTime.now().toIso8601String(),
+      );
+
+      provider.addTransaction(transaction);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${_transactionType == "income" ? "Income" : "Expense"} added successfully!',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
 
     Navigator.pop(context);
   }
@@ -155,9 +201,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Add Transaction',
-                          style: TextStyle(
+                        Text(
+                          widget.transactionToEdit != null ? 'Edit Transaction' : 'Add Transaction',
+                          style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                           ),
@@ -237,29 +283,50 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                             const SizedBox(height: 16),
 
                             // Category Dropdown
-                            DropdownButtonFormField<String>(
-                              initialValue: _selectedCategory,
-                              decoration: InputDecoration(
-                                labelText: 'Category',
-                                prefixIcon: const Icon(Icons.category),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                filled: true,
-                                fillColor: Colors.grey[50],
-                              ),
-                              items: _categories.map((category) {
-                                return DropdownMenuItem(
-                                  value: category,
-                                  child: Text(category),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedCategory = value;
-                                });
-                              },
-                            ),
+                            _isLoadingCategories
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Colors.grey[300]!),
+                                      borderRadius: BorderRadius.circular(16),
+                                      color: Colors.grey[50],
+                                    ),
+                                    child: const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        ),
+                                        SizedBox(width: 12),
+                                        Text('Loading categories...'),
+                                      ],
+                                    ),
+                                  )
+                                : DropdownButtonFormField<String>(
+                                    initialValue: _selectedCategory,
+                                    decoration: InputDecoration(
+                                      labelText: 'Category',
+                                      prefixIcon: const Icon(Icons.category),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.grey[50],
+                                    ),
+                                    items: _categories.map((category) {
+                                      return DropdownMenuItem(
+                                        value: category,
+                                        child: Text(category),
+                                      );
+                                    }).toList(),
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _selectedCategory = value;
+                                      });
+                                    },
+                                  ),
                             const SizedBox(height: 16),
 
                             // Custom Category (if Others selected)
@@ -391,13 +458,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   Widget _buildTypeButton(String label, String value, Color color) {
     final isSelected = _transactionType == value;
-    
+
     return ElevatedButton(
       onPressed: () {
         setState(() {
           _transactionType = value;
           _selectedCategory = null; // Reset category when switching type
         });
+        _loadCategories(); // Reload categories for new type
       },
       style: ElevatedButton.styleFrom(
         backgroundColor: isSelected ? color : Colors.grey[200],
