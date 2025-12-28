@@ -405,12 +405,12 @@ class AppProvider with ChangeNotifier {
     }
   }
 
-  // Exchange rates relative to USD (approximate rates)
+  // Exchange rates relative to USD (currency per USD)
   static const Map<String, double> _exchangeRates = {
     'usd': 1.0,
-    'eur': 0.85,
-    'gbp': 0.73,
-    'jpy': 110.0,
+    'eur': 0.92,
+    'gbp': 0.79,
+    'jpy': 152.0,
     'try': 42.0,
     'jod': 0.71,
   };

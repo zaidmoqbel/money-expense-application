@@ -446,32 +446,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Map<String, double> _calculateCategoryExpenses(List transactions) {
-    final Map<String, double> categoryExpenses = {};
-
-    for (var transaction in transactions) {
-      if (transaction.type == 'expense') {
-        categoryExpenses[transaction.category] =
-            (categoryExpenses[transaction.category] ?? 0) + transaction.amount;
-      }
-    }
-
-    return categoryExpenses;
-  }
-
-  Map<String, double> _calculateCategoryIncome(List transactions) {
-    final Map<String, double> categoryIncome = {};
-
-    for (var transaction in transactions) {
-      if (transaction.type == 'income') {
-        categoryIncome[transaction.category] =
-            (categoryIncome[transaction.category] ?? 0) + transaction.amount;
-      }
-    }
-
-    return categoryIncome;
-  }
-
   void _editTransaction(TransactionModel transaction) {
     // Show add transaction screen with pre-filled data for editing
     showModalBottomSheet(

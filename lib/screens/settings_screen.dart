@@ -440,7 +440,6 @@ class _CategoryManagementDialogState extends State<_CategoryManagementDialog> {
   final TextEditingController _newCategoryController = TextEditingController();
   String _selectedType = 'expense';
   List<String> _currentCategories = [];
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -449,15 +448,12 @@ class _CategoryManagementDialogState extends State<_CategoryManagementDialog> {
   }
 
   Future<void> _loadCategories() async {
-    setState(() => _isLoading = true);
     try {
       final categories = await widget.provider.getCategoriesByType(_selectedType);
       setState(() {
         _currentCategories = categories;
-        _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error loading categories: $e')),
       );
